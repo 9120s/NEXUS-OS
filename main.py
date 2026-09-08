@@ -45,12 +45,10 @@ class TicketModal(discord.ui.Modal):
         ch = await guild.create_text_channel(name=f"ticket-{user.name}", overwrites=overwrites)
         
         details_text = self.children[0].value
-        
-        # استخدام Triple Quotes لمنع أي أخطاء في الأسطر النصية
-        desc = f"""**صاحب التذكرة:** {user.mention}
-
-**التفاصيل:**
-```{details_text}```"""
+        desc = (
+            f"**صاحب التذكرة:** {user.mention}\n\n"
+            f"**التفاصيل:**\n```{details_text}```"
+        )
         
         embed = discord.Embed(
             title=f"🌐 AURA | تذكرة جديدة ({self.category})",
@@ -69,7 +67,11 @@ class TicketModal(discord.ui.Modal):
             if log_channel:
                 log_embed = discord.Embed(
                     title="📝 تم إغلاق تذكرة",
-                    description=f"**اسم القناة:** `{ch.name}`\n**أُغلقت بواسطة:** {inter.user.mention}\n**صاحب التذكرة الأصلي:** {user.mention}",
+                    description=(
+                        f"**اسم القناة:** `{ch.name}`\n"
+                        f"**أُغلقت بواسطة:** {inter.user.mention}\n"
+                        f"**صاحب التذكرة الأصلي:** {user.mention}"
+                    ),
                     color=0xED4245
                 )
                 await log_channel.send(embed=log_embed)
@@ -115,9 +117,10 @@ async def on_member_join(member: discord.Member):
 
     welcome_ch = discord.utils.get(member.guild.text_channels, name="welcome")
     if welcome_ch:
-        welcome_desc = f"""مرحباً بك {member.mention}، نورت السيرفر!
-
-نتمنى لك وقتاً ممتعاً معنا. لا تنسَ الاطلاع على القوانين في `#rules`."""
+        welcome_desc = (
+            f"مرحباً بك {member.mention}، نورت السيرفر!\n\n"
+            f"نتمنى لك وقتاً ممتعاً معنا. لا تنسَ الاطلاع على القوانين في `#rules`."
+        )
         embed = discord.Embed(
             title=f"👋 أهلاً بك في {member.guild.name}!",
             description=welcome_desc,
@@ -151,8 +154,55 @@ async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
         channel = guild.get_channel(payload.channel_id)
         channel_mention = channel.mention if channel else "قناة غير معروفة"
 
-    log_desc = f"""**المرسل:** {author}
-**القناة:** {channel_mention}
+    log_desc = (
+        f"**المرسل:** {author}\n"
+        f"**القناة:** {channel_mention}\n\n"
+        f"**المحتوى:**\n```{content}```"
+    )
 
-**المحتوى:**
-```{content}
+    embed = discord.Embed(
+        title="🗑️ تم حذف رسالة",
+        description=log_desc,
+        color=0xFEE75C
+    )
+    await log_ch.send(embed=embed)
+
+# --- 5. أوامر Slash ---
+
+@bot.slash_command(name="tickets", description="نشر بنل التذاكر التفاعلي")
+@commands.has_permissions(administrator=True)
+async def tickets(ctx: discord.ApplicationContext):
+    view = discord.ui.View(timeout=None)
+    view.add_item(TicketSelect())
+    embed = discord.Embed(
+        title="🌐 AURA | مركز الدعم والخدمات",
+        description="مرحباً بك. اختر القسم المناسب لمشكلتك من القائمة المنسدلة أسفله لفتح تذكرة مباشرة.",
+        color=0x2b2d31
+    )
+    embed.set_footer(text="AURA • Automated Support Engine")
+    await ctx.channel.send(embed=embed, view=view)
+    await ctx.respond("تم نشر لوحة التذاكر بنجاح.", ephemeral=True)
+
+@bot.slash_command(name="clear", description="مسح عدد محدد من الرسائل")
+@commands.has_permissions(manage_messages=True)
+async def clear(ctx: discord.ApplicationContext, amount: int = 10):
+    deleted = await ctx.channel.purge(limit=amount)
+    await ctx.respond(f"تم مسح {len(deleted)} رسالة بنجاح.", ephemeral=True)
+
+@bot.slash_command(name="stats", description="عرض إحصائيات السيرفر الحالية")
+async def stats(ctx: discord.ApplicationContext):
+    g = ctx.guild
+    embed = discord.Embed(title=f"📊 إحصائيات {g.name}", color=0x2b2d31)
+    embed.add_field(name="👥 الأعضاء", value=f"`{g.member_count}`", inline=True)
+    embed.add_field(name="💬 القنوات", value=f"`{len(g.channels)}`", inline=True)
+    embed.add_field(name="🚀 التعزيزات", value=f"`{g.premium_subscription_count}`", inline=True)
+    await ctx.respond(embed=embed, ephemeral=True)
+
+@bot.slash_command(name="ping", description="فحص سرعة استجابة البوت")
+async def ping(ctx: discord.ApplicationContext):
+    await ctx.respond(f"🏓 Pong! السرعة: {round(bot.latency * 1000)}ms", ephemeral=True)
+
+if __name__ == "__main__":
+    token = os.environ.get("DISCORD_TOKEN")
+    if token:
+        bot.run(token)
