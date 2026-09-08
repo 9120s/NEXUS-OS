@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "NEXUS-OS: ONLINE"
+    return "AURA Engine: ONLINE"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -42,11 +42,11 @@ class TicketModal(discord.ui.Modal):
         ch = await guild.create_text_channel(name=f"ticket-{user.name}", overwrites=overwrites)
         
         embed = discord.Embed(
-            title=f"🌐 NEXUS-OS | تذكرة جديدة",
+            title=f"🌐 AURA | تذكرة جديدة",
             description=f"**صاحب التذكرة:** {user.mention}\n\n**التفاصيل:**\n```{self.children[0].value}```",
             color=0x5865F2
         )
-        embed.set_footer(text="NEXUS-OS Support Engine")
+        embed.set_footer(text="AURA Support Engine")
 
         view = discord.ui.View(timeout=None)
         close_btn = discord.ui.Button(label="إغلاق التذكرة", style=discord.ButtonStyle.danger, emoji="🔒")
@@ -74,12 +74,12 @@ class TicketSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(TicketModal(self.values[0]))
 
-# --- 4. الأوامر الواضحة والمباشرة ---
+# --- 4. الأوامر ---
 
 @bot.event
 async def on_ready():
     print(f"==========================================")
-    print(f" NEXUS-OS Ready: {bot.user.name}")
+    print(f" AURA Ready: {bot.user.name}")
     print(f"==========================================")
 
 # /tickets - إرسال بنل التذاكر
@@ -89,11 +89,11 @@ async def tickets(ctx: discord.ApplicationContext):
     view = discord.ui.View(timeout=None)
     view.add_item(TicketSelect())
     embed = discord.Embed(
-        title="🌐 NEXUS-OS | مركز الدعم والخدمات",
+        title="🌐 AURA | مركز الدعم والخدمات",
         description="مرحباً بك. اختر القسم المناسب لمشكلتك من القائمة المنسدلة أسفله لفتح تذكرة مباشرة.",
         color=0x2b2d31
     )
-    embed.set_footer(text="NEXUS-OS • Automated Support")
+    embed.set_footer(text="AURA • Automated Support")
     await ctx.channel.send(embed=embed, view=view)
     await ctx.respond("تم نشر لوحة التذاكر بنجاح.", ephemeral=True)
 
@@ -123,5 +123,3 @@ if __name__ == "__main__":
     token = os.environ.get("DISCORD_TOKEN")
     if token:
         bot.run(token)
-    else:
-        print("خطأ: لم يتم العثور على DISCORD_TOKEN في Environment Variables!")
