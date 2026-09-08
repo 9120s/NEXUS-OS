@@ -4,12 +4,12 @@ from flask import Flask
 import discord
 from discord.ext import commands
 
-# 1. خادم Web لضمان استمرار التشغيل 24/7
+# 1. خادم Web لضمان استمرار التشغيل 24/7 على Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "AURA Engine: ONLINE"
+    return "AURA Core Engine: ONLINE"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -17,15 +17,16 @@ def run_web():
 
 threading.Thread(target=run_web, daemon=True).start()
 
-# 2. إعداد البوت
+# 2. إعداد البوت مع كامل الصلاحيات (Intents)
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- 3. نظام التذاكر المتقدم ---
+# --- 3. نظام التذاكر وسجلات التذاكر ---
 
 class TicketModal(discord.ui.Modal):
     def __init__(self, category: str):
         super().__init__(title=f"تذكرة: {category}")
+        self.category = category
         self.add_item(discord.ui.InputText(
             label="تفاصيل المشكلة / الطلب",
             style=discord.InputTextStyle.long,
@@ -34,6 +35,8 @@ class TicketModal(discord.ui.Modal):
 
     async def callback(self, interaction: discord.Interaction):
         guild, user = interaction.guild, interaction.user
+        
+        # إنشاء القناة الخاصة بالتذكرة
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
@@ -42,7 +45,7 @@ class TicketModal(discord.ui.Modal):
         ch = await guild.create_text_channel(name=f"ticket-{user.name}", overwrites=overwrites)
         
         embed = discord.Embed(
-            title=f"🌐 AURA | تذكرة جديدة",
+            title=f"🌐 AURA | تذكرة جديدة ({self.category})",
             description=f"**صاحب التذكرة:** {user.mention}\n\n**التفاصيل:**\n```{self.children[0].value}```",
             color=0x5865F2
         )
@@ -52,14 +55,25 @@ class TicketModal(discord.ui.Modal):
         close_btn = discord.ui.Button(label="إغلاق التذكرة", style=discord.ButtonStyle.danger, emoji="🔒")
         
         async def close_callback(inter: discord.Interaction):
-            await inter.response.send_message("🔒 جاري إغلاق التذكرة...")
-            await inter.channel.delete()
+            await inter.response.send_message("🔒 جاري إغلاق التذكرة وحفظ السجل...")
+            
+            # إرسال سجل التذكرة (Log) إلى قناة log-tickets إن وجدت
+            log_channel = discord.utils.get(guild.text_channels, name="log-tickets") or discord.utils.get(guild.text_channels, name="logs-ticket")
+            if log_channel:
+                log_embed = discord.Embed(
+                    title="📝 تم إغلاق تذكرة",
+                    description=f"**اسم القناة:** `{ch.name}`\n**أُغلقت بواسطة:** {inter.user.mention}\n**صاحب التذكرة الأصلي:** {user.mention}",
+                    color=0xED4245
+                )
+                await log_channel.send(embed=log_embed)
+                
+            await ch.delete()
             
         close_btn.callback = close_callback
         view.add_item(close_btn)
 
         await ch.send(embed=embed, view=view)
-        await interaction.response.send_message(f"✅ تم إنشاء التذكرة بنجاح: {ch.mention}", ephemeral=True)
+        await interaction.response.send_message(f"✅ تم إنشاء تذكرتك بنجاح: {ch.mention}", ephemeral=True)
 
 class TicketSelect(discord.ui.Select):
     def __init__(self):
@@ -74,15 +88,53 @@ class TicketSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(TicketModal(self.values[0]))
 
-# --- 4. الأوامر ---
+# --- 4. الأحداث الشاملة (Welcome, Auto-Role, Message Logs) ---
 
 @bot.event
 async def on_ready():
     print(f"==========================================")
-    print(f" AURA Ready: {bot.user.name}")
+    print(f" AURA Systems Active | Logged in as {bot.user.name}")
     print(f"==========================================")
 
-# /tickets - إرسال بنل التذاكر
+# الترحب بالأعضاء الجدد وإعطائهم الرتبة التلقائية
+@bot.event
+async def on_member_join(member: discord.Member):
+    # 1. إعطاء رتبة تلقائية (تأكد من وجود رتبة باسم Member أو استبدل الاسم)
+    role = discord.utils.get(member.guild.roles, name="Member")
+    if role:
+        try:
+            await member.add_roles(role)
+        except Exception as e:
+            print(f"Failed to give role: {e}")
+
+    # 2. إرسال رسالة تترحيب في قناة welcome
+    welcome_ch = discord.utils.get(member.guild.text_channels, name="welcome")
+    if welcome_ch:
+        embed = discord.Embed(
+            title=f"👋 أهلاً بك في {member.guild.name}!",
+            description=f"مرحباً بك {member.mention}، نورت السيرفر!\n\nنتمنى لك وقتاً ممتعاً معنا. لا تنسَ الاطلاع على القوانين في `#rules`.",
+            color=0x57F287
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=f"العضو رقم {member.guild.member_count}")
+        await welcome_ch.send(embed=embed)
+
+# سجل حذف الرسائل (Log Messages)
+@bot.event
+async def on_message_delete(message: discord.Message):
+    if message.author.bot:
+        return
+    log_ch = discord.utils.get(message.guild.text_channels, name="log-messages")
+    if log_ch:
+        embed = discord.Embed(
+            title="🗑️ تم حذف رسالة",
+            description=f"**المرسل:** {message.author.mention}\n**القناة:** {message.channel.mention}\n\n**المحتوى:**\n```{message.content}```",
+            color=0xFEE75C
+        )
+        await log_ch.send(embed=embed)
+
+# --- 5. أوامر Slash ---
+
 @bot.slash_command(name="tickets", description="نشر بنل التذاكر التفاعلي")
 @commands.has_permissions(administrator=True)
 async def tickets(ctx: discord.ApplicationContext):
@@ -93,18 +145,16 @@ async def tickets(ctx: discord.ApplicationContext):
         description="مرحباً بك. اختر القسم المناسب لمشكلتك من القائمة المنسدلة أسفله لفتح تذكرة مباشرة.",
         color=0x2b2d31
     )
-    embed.set_footer(text="AURA • Automated Support")
+    embed.set_footer(text="AURA • Automated Support Engine")
     await ctx.channel.send(embed=embed, view=view)
     await ctx.respond("تم نشر لوحة التذاكر بنجاح.", ephemeral=True)
 
-# /clear - مسح الرسائل
 @bot.slash_command(name="clear", description="مسح عدد محدد من الرسائل")
 @commands.has_permissions(manage_messages=True)
 async def clear(ctx: discord.ApplicationContext, amount: int = 10):
     deleted = await ctx.channel.purge(limit=amount)
     await ctx.respond(f"تم مسح {len(deleted)} رسالة بنجاح.", ephemeral=True)
 
-# /stats - إحصائيات السيرفر
 @bot.slash_command(name="stats", description="عرض إحصائيات السيرفر الحالية")
 async def stats(ctx: discord.ApplicationContext):
     g = ctx.guild
@@ -114,7 +164,6 @@ async def stats(ctx: discord.ApplicationContext):
     embed.add_field(name="🚀 التعزيزات", value=f"`{g.premium_subscription_count}`", inline=True)
     await ctx.respond(embed=embed, ephemeral=True)
 
-# /ping - فحص الاستجابة
 @bot.slash_command(name="ping", description="فحص سرعة استجابة البوت")
 async def ping(ctx: discord.ApplicationContext):
     await ctx.respond(f"🏓 Pong! السرعة: {round(bot.latency * 1000)}ms", ephemeral=True)
