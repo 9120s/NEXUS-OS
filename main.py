@@ -45,6 +45,4 @@ class TicketModal(discord.ui.Modal):
         ch = await guild.create_text_channel(name=f"ticket-{user.name}", overwrites=overwrites)
         
         details_text = self.children[0].value
-        embed = discord.Embed(
-            title=f"🌐 AURA | تذكرة جديدة ({self.category})",
-            description=f"**صاحب التذكرة:** {user.mention}\n\n**التفاصيل:**\n```{details_text}
+        desc = f"**صاحب التذكرة:** {user.mention}\n\n**التفاصيل:**\n```{details_text}
