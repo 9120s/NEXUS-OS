@@ -1,22 +1,37 @@
 import os
+import threading
 import discord
-from discord.ext import commands
+from flask import Flask
 import database
 
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
+# 1. إعداد خادم ويب خفيف لإرضاء Render
+app = Flask(__name__)
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+@app.route('/')
+def home():
+    return "NEXUS-OS Bot is Online!"
+
+def run_web_service():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# 2. إعدادات بوت ديسكورد
+bot = discord.Bot(intents=discord.Intents.default())
 
 @bot.event
 async def on_ready():
     await database.init_db()
-    print(f"🤖 NEXUS OS يعمل بنجاح باسم: {bot.user}")
+    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    print("Database initialized successfully!")
 
-# تحميل الموديولات الثلاثة
-bot.load_extension("cogs.profile")
-bot.load_extension("cogs.tickets")
-bot.load_extension("cogs.dashboard")
-
-bot.run(os.getenv("DISCORD_TOKEN"))
+# 3. تشغيل الويب سيرفر والبوت معاً
+if __name__ == "__main__":
+    # تشغيل سيرفر Flask في Thread منفصل
+    threading.Thread(target=run_web_service, daemon=True).start()
+    
+    # الحصول على التوكن وتشغيل البوت
+    token = os.environ.get("DISCORD_TOKEN")
+    if token:
+        bot.run(token)
+    else:
+        print("ERROR: DISCORD_TOKEN environment variable not set!")
